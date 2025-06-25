@@ -1,0 +1,136 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: Demo
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: content-moderation-demo
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-west-1
+  stage: ${opt:stage, 'dev'}
+  iam:
+    role:
+      name: content-mod-${self:provider.stage}-role
+      statements:
+        - Effect: Allow
+          Action:
+            - rekognition:DetectModerationLabels
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:ListBucket
+          Resource: arn:aws:s3:::${self:custom.bucketName}
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:DeleteObject
+            - s3:PutObject
+          Resource: arn:aws:s3:::${self:custom.bucketName}/*
+
+custom:
+  bucketName: ${self:service}-${self:provider.stage}-moderation-images-${aws:accountId}
+
+functions:
+  contentModeration:
+    handler: src/lambdas/contentModeration.handler
+    events:
+      - sqs:
+          arn: !GetAtt ImageQueue.Arn
+          batchSize: 1
+
+  # API endpoints for frontend
+  generatePresignedUrl:
+    handler: src/lambdas/api.generatePresignedUrl
+    environment:
+      BUCKET_NAME: ${self:custom.bucketName}
+    events:
+      - http:
+          path: /upload-url
+          method: post
+          cors: true
+
+  listImages:
+    handler: src/lambdas/api.listImages
+    environment:
+      BUCKET_NAME: ${self:custom.bucketName}
+    events:
+      - http:
+          path: /images
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    # S3 Bucket for image uploads
+    PhotoBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketName}
+        NotificationConfiguration:
+          QueueConfigurations:
+            - Event: s3:ObjectCreated:*
+              Queue: !GetAtt ImageQueue.Arn
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - "*"
+              AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+
+    # SQS Queue for processing images
+    ImageQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-image-queue
+        MessageRetentionPeriod: 1209600 # 14 days
+        VisibilityTimeout: 60 # 60 seconds
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ImageDeadLetterQueue.Arn
+          maxReceiveCount: 3
+
+    # Dead Letter Queue for failed messages
+    ImageDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-image-dlq
+        MessageRetentionPeriod: 1209600 # 14 days
+
+    # SQS Queue Policy to allow S3 to send messages
+    ImageQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref ImageQueue
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: s3.amazonaws.com
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt ImageQueue.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: arn:aws:s3:::${self:custom.bucketName}
+
+  Outputs:
+    PhotoBucketName:
+      Description: "Name of the S3 bucket for uploading images"
+      Value: !Ref PhotoBucket
+
+    ImageQueueArn:
+      Description: "ARN of the image processing queue"
+      Value: !GetAtt ImageQueue.Arn
+
+    ImageDLQArn:
+      Description: "ARN of the image processing dead letter queue"
+      Value: !GetAtt ImageDeadLetterQueue.Arn
