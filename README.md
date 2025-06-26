@@ -2,9 +2,22 @@
 
 A full-stack AWS-powered content moderation system that automatically analyzes and filters inappropriate images using machine learning.
 
-## 🏗️ Architecture
+## 📚 Documentation & Resources
 
+### Architecture Diagram
 ![Content Moderation System Architecture](content-moderation-diagram.png)
+
+### Detailed Presentation
+📋 [Complete Tutorial: How to Build a Serverless Content Moderation System with AWS](how_to_build_a_serverless_content_moderation_system_with_aws.pdf)
+
+This comprehensive slide presentation includes:
+- Step-by-step implementation guide
+- AWS service configurations and best practices
+- Troubleshooting tips and common issues
+- Advanced optimization techniques
+- Cost optimization strategies
+
+## 🏗️ Architecture
 
 This project consists of two main components:
 
@@ -87,11 +100,36 @@ const API_BASE_URL = "YOUR_API_GATEWAY_URL";
 5. **Moderation**: Inappropriate content is automatically flagged/removed
 6. **Display**: Approved images are shown in the gallery
 
-## 📊 Monitoring
+## 📊 Monitoring & Logging
 
-- **CloudWatch Logs**: Monitor Lambda function execution
-- **SQS Dead Letter Queue**: Track failed processing attempts
-- **S3 Events**: Audit image uploads and deletions
+### Live Log Monitoring
+
+Monitor your content moderation pipeline in real-time:
+
+```bash
+# Monitor content moderation Lambda function logs
+cd backend
+npm run logs
+
+# Alternative: Direct serverless commands
+serverless logs --function contentModeration --tail
+serverless logs --function generatePresignedUrl --tail
+serverless logs --function listImages --tail
+
+# View historical logs (last 1 hour)
+serverless logs --function contentModeration --startTime 1h
+
+# Monitor specific log groups with AWS CLI
+aws logs tail /aws/lambda/content-moderation-demo-dev-contentModeration --follow
+aws logs tail /aws/lambda/content-moderation-demo-dev-generatePresignedUrl --follow
+```
+
+### CloudWatch Dashboard
+
+- **CloudWatch Logs**: Monitor Lambda function execution and debugging
+- **SQS Dead Letter Queue**: Track failed processing attempts and retry patterns
+- **S3 Events**: Audit image uploads, deletions, and bucket activity
+- **Rekognition Metrics**: Content moderation confidence scores and detection rates
 
 ## 🛡️ Content Moderation
 
@@ -114,23 +152,3 @@ cd backend
 # First empty the S3 bucket manually
 serverless remove
 ```
-
-## 📝 License
-
-MIT License - see individual README files in backend/ and frontend/ folders for more details.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📞 Support
-
-For issues and questions:
-
-- Check the individual README files in `/backend` and `/frontend`
-- Review CloudWatch logs for debugging
-- Ensure AWS credentials and permissions are properly configured
